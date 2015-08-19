@@ -259,7 +259,7 @@ GATTRequester::connect_kwarg(boost::python::tuple args, boost::python::dict kwar
 {
 	// Static method wrapper around connect. First obtain self/this
 	GATTRequester& self = boost::python::extract<GATTRequester&>(args[0]);
-	
+
 	// Argument default values.
 	bool wait=false;
 	std::string channel_type="public";
@@ -267,7 +267,7 @@ GATTRequester::connect_kwarg(boost::python::tuple args, boost::python::dict kwar
 	int psm=0;
 	int mtu=0;
 	int kwargsused = 0;
-	
+
 	// Extract each argument either positionally or from the keyword arguments
 	if (boost::python::len(args) > 1) {
 		wait = boost::python::extract<bool>(args[1]);
@@ -299,14 +299,14 @@ GATTRequester::connect_kwarg(boost::python::tuple args, boost::python::dict kwar
 		mtu = boost::python::extract<int>(kwargs.get("mtu"));
 		kwargsused++;
 	}
-	
+
 	// Check that we have used all keyword arguments
 	if (kwargsused != boost::python::len(kwargs))
 		throw std::runtime_error("Error in keyword arguments");
-	
+
 	// Call the real method
 	self.connect(wait, channel_type, security_level, psm, mtu);
-	
+
 	return boost::python::object(); // boost-ism for "None"
 }
 
@@ -520,7 +520,7 @@ boost::python::list GATTRequester::discover_primary() {
     PyThreadsGuard guard;
 	GATTResponse response;
 	discover_primary_async(&response);
-	
+
 	if (not response.wait(5*MAX_WAIT_FOR_PACKET))
         // FIXME: now, response is deleted, but is still registered on
         // GLIB as callback!!
@@ -584,6 +584,55 @@ boost::python::list GATTRequester::discover_characteristics(int start, int end,
         throw std::runtime_error("Device is not responding!");
     return response.received();
 
+}
+
+static void discover_desc_cb(guint8 status, GSList *characteristics,
+        void *user_data) {
+    GATTResponse* response = (GATTResponse*) user_data;
+    if (status || !characteristics) {
+        response->notify(status);
+        return;
+    }
+
+    for (GSList * l = characteristics; l; l = l->next) {
+        struct gatt_desc *chars = (gatt_desc*) l->data;
+        boost::python::dict adescr;
+        adescr["uuid"] = chars->uuid;
+        adescr["handle"] = chars->handle;
+        response->on_response(adescr);
+    }
+
+    response->notify(status);
+}
+
+void GATTRequester::discover_descriptors_async(GATTResponse* response, int start, int end, std::string uuid_str) {
+    check_connected();
+
+    if (uuid_str.size() == 0) {
+        //TODO handle error
+        gatt_discover_desc(_attrib, start, end, NULL, discover_desc_cb,
+                (gpointer) response);
+    } else {
+        bt_uuid_t uuid;
+        if (bt_string_to_uuid(&uuid, uuid_str.c_str()) < 0) {
+            throw std::runtime_error("Invalid UUID");
+        }
+        //TODO handle error
+        gatt_discover_desc(_attrib, start, end, &uuid, discover_desc_cb,
+                (gpointer) response);
+    }
+}
+
+boost::python::list GATTRequester::discover_descriptors(int start, int end, std::string uuid) {
+    PyThreadsGuard guard;
+    GATTResponse response;
+    discover_descriptors_async(&response, start, end, uuid);
+
+    if (not response.wait(5 * MAX_WAIT_FOR_PACKET))
+        // FIXME: now, response is deleted, but is still registered on
+        // GLIB as callback!!
+        throw std::runtime_error("Device is not responding!");
+    return response.received();
 }
 
 void GATTRequester::check_connected() {

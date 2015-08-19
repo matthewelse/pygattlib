@@ -12,6 +12,8 @@
 #include "gattlib.h"
 #include "gattservices.h"
 
+#include <boost/algorithm/string.hpp>
+
 DiscoveryService::DiscoveryService(const std::string device) :
 	_device(device),
 	_device_desc(-1) {
@@ -99,22 +101,140 @@ DiscoveryService::get_advertisements(int timeout, boost::python::dict & ret) {
 }
 
 void
-DiscoveryService::process_input(unsigned char* buffer, int size,
-		boost::python::dict & ret) {
-	unsigned char* ptr = buffer + HCI_EVENT_HDR_SIZE + 1;
-	evt_le_meta_event* meta = (evt_le_meta_event*) ptr;
+DiscoveryService::process_input(unsigned char* buffer, int size, boost::python::dict & ret) {
 
-	if (meta->subevent != 0x02 || (uint8_t)buffer[BLE_EVENT_TYPE] != BLE_SCAN_RESPONSE)
-		return;
+    for (int i=0; i < size; i++) {
+        unsigned char* ptr = buffer + HCI_EVENT_HDR_SIZE + 1;
+        evt_le_meta_event* meta = (evt_le_meta_event*) ptr;
 
-	le_advertising_info* info;
-	info = (le_advertising_info*) (meta->data + 1);
+        if (meta->subevent != EVT_LE_ADVERTISING_REPORT) {
+        //|| (uint8_t)buffer[BLE_EVENT_TYPE] != BLE_SCAN_RESPONSE) {
+            //std::cout << "not an advertising report" << std::endl;
+            continue;
+        }
 
-	char addr[18];
-	ba2str(&info->bdaddr, addr);
+        le_advertising_info* info;
+        info = (le_advertising_info*) (meta->data + 1);
 
-	std::string name = parse_name(info->data, info->length);
-	ret[addr] = name;
+        char addr[18];
+        ba2str(&info->bdaddr, addr);
+
+        int flags = parse_flags(info->data, info->length);
+        int appearance = parse_appearance(info->data, info->length);
+        std::string name = parse_name(info->data, info->length);
+        boost::python::list uuids = parse_uuids(info->data, info->length);
+
+        if (!ret.contains(addr)) {
+        	boost::python::dict new_object;
+        	ret[addr] = new_object;
+    	}
+
+    	if (!ret[addr].contains("flags") || flags != 0)
+    		ret[addr]["flags"] = flags;
+
+    	if (!ret[addr].contains("appearance") || appearance != 0)
+    		ret[addr]["appearance"] = appearance;
+
+    	if (!ret[addr].contains("name") || name.length() > boost::python::len(ret[addr]["name"]))
+    		ret[addr]["name"] = name;
+
+    	if (!ret[addr].contains("uuids") || boost::python::len(uuids) > boost::python::len(ret[addr]["uuids"]))
+    		ret[addr]["uuids"] = uuids;
+
+        ptr += sizeof(evt_le_meta_event);
+    }
+}
+
+int
+DiscoveryService::parse_appearance(uint8_t* data, size_t size) {
+	size_t offset = 0;
+
+	while (offset < size) {
+		uint8_t field_len = data[0];
+
+		if (field_len == 0 || offset + field_len > size) {
+			// this probably ought to be an exception
+			return 0;
+		}
+
+		if (data[1] == EIR_APPEARANCE) {
+			uint16_t appearance = ((uint16_t *)(data + 2))[0];
+			return appearance;
+		}
+
+		offset += field_len + 1;
+		data += field_len + 1;
+	}
+
+	return 0;
+}
+
+boost::python::list
+DiscoveryService::parse_uuids(uint8_t * data, size_t size) {
+	size_t offset = 0;
+	boost::python::list uuids;
+
+	while (offset < size) {
+		uint8_t field_len = data[0];
+
+		if (field_len == 0 || offset + field_len > size) {
+			// this probably ought to be an exception
+			return uuids;
+		}
+
+		if (data[1] == EIR_16BIT_UUIDS_COMPLETE || data[1] == EIR_16BIT_UUIDS_INCOMPLETE) {
+			int number_of_uuids = (field_len - 1) / 2;
+			uint16_t *big_uuids = (uint16_t *)(data + 2);
+
+			for (int i = 0; i < number_of_uuids; i++) {
+				// add this uuid to the list
+				uuids.append(big_uuids[i]);
+			}
+		} else if (data[1] == EIR_32BIT_UUIDS_COMPLETE || data[1] == EIR_32BIT_UUIDS_INCOMPLETE) {
+			int number_of_uuids = (field_len - 1) / 4;
+			uint32_t *big_uuids = (uint32_t *)(data + 2);
+
+			for (int i = 0; i < number_of_uuids; i++) {
+				// add this uuid to the list
+				uuids.append(big_uuids[i]);
+			}
+		} else if (data[1] == EIR_128BIT_UUIDS_COMPLETE || data[1] == EIR_128BIT_UUIDS_INCOMPLETE) {
+			int number_of_uuids = (field_len - 1) / 16;
+			uint32_t *big_uuids = (uint32_t *)(data + 2);
+
+			for (int i = 0; i < number_of_uuids * 4; i+=4) {
+				// add this uuid to the list
+				uuids.append(boost::python::make_tuple(big_uuids[i], big_uuids[i+1], big_uuids[i+2], big_uuids[i+3]));
+			}
+		}
+
+		offset += field_len + 1;
+		data += field_len + 1;
+	}
+
+	return uuids;
+}
+
+int
+DiscoveryService::parse_flags(uint8_t* data, size_t size) {
+	size_t offset = 0;
+
+	while (offset < size) {
+		uint8_t field_len = data[0];
+
+		if (field_len == 0 || offset + field_len > size) {
+			// this probably ought to be an exception
+			return 0;
+		}
+
+		if (data[1] == EIR_FLAGS)
+			return data[2];
+
+		offset += field_len + 1;
+		data += field_len + 1;
+	}
+
+	return 0;
 }
 
 std::string
@@ -133,6 +253,11 @@ DiscoveryService::parse_name(uint8_t* data, size_t size) {
 		case EIR_NAME_SHORT:
 		case EIR_NAME_COMPLETE:
 			name_len = field_len - 1;
+
+			// remove any trailing \x00s
+			if (data[1 + name_len] == '\0')
+				name_len--;
+
 			if (name_len > size)
 				return unknown;
 

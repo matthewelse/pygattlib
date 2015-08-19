@@ -104,6 +104,10 @@ BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(
         GATTRequester_discover_characteristics_async_overloads,
         GATTRequester::discover_characteristics_async, 1, 4)
 
+BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(
+        GATTRequester_discover_descriptors_overloads,
+        GATTRequester::discover_descriptors, 0, 3)
+
 BOOST_PYTHON_MODULE(gattlib) {
 
     register_ptr_to_python<GATTRequester*>();
@@ -131,7 +135,10 @@ BOOST_PYTHON_MODULE(gattlib) {
                 GATTRequester_discover_characteristics_overloads())
         .def("discover_characteristics_async",
                 &GATTRequester::discover_characteristics_async,
-                GATTRequester_discover_characteristics_async_overloads());
+                GATTRequester_discover_characteristics_async_overloads())
+        .def("discover_descriptors",
+                &GATTRequester::discover_descriptors,
+                GATTRequester_discover_descriptors_overloads());
 
     register_ptr_to_python<GATTResponse*>();
 
