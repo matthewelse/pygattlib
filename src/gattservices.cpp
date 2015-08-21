@@ -135,7 +135,8 @@ DiscoveryService::process_input(unsigned char* buffer, int size, boost::python::
     	if (!ret[addr].contains("appearance") || appearance != 0)
     		ret[addr]["appearance"] = appearance;
 
-    	if (!ret[addr].contains("name") || name.length() > boost::python::len(ret[addr]["name"]))
+    	// it's safe to cast the length to an unsigned int, since length > 0.
+    	if (!ret[addr].contains("name") || name.length() > (unsigned int)boost::python::len(ret[addr]["name"]))
     		ret[addr]["name"] = name;
 
     	if (!ret[addr].contains("uuids") || boost::python::len(uuids) > boost::python::len(ret[addr]["uuids"]))
