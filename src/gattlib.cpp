@@ -241,6 +241,8 @@ GATTRequester::connect(bool wait,
          &gerr,
          (gpointer)this);
 
+    usleep(500000);
+
     if (_channel == NULL) {
         _state = STATE_DISCONNECTED;
 
