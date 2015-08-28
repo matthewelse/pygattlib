@@ -455,6 +455,32 @@ GATTRequester::write_by_handle(uint16_t handle, std::string data) {
     return response.received();
 }
 
+static void
+write_without_response_by_handle_cb(gpointer userp) {
+    GATTResponse* response = (GATTResponse*)userp;
+    response->notify(0);
+}
+
+void
+GATTRequester::write_without_response_by_handle_async(uint16_t handle, std::string data, GATTResponse* response) {
+    check_channel();
+    gatt_write_cmd(_attrib, handle, (const uint8_t*)data.data(), data.size(),
+                   write_without_response_by_handle_cb, (gpointer)response);
+}
+
+
+void
+GATTRequester::write_without_response_by_handle(uint16_t handle, std::string data) {
+    PyThreadsGuard guard;
+    GATTResponse response;
+
+    write_without_response_by_handle_async(handle, data, &response);
+
+    if (not response.wait(MAX_WAIT_FOR_PACKET))
+        throw std::runtime_error("Device is not responding.");
+}
+
+
 void
 GATTRequester::check_channel() {
     time_t ts = time(NULL);
