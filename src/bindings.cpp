@@ -94,19 +94,19 @@ private:
 };
 
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(
-        start_advertising, BeaconService::start_advertising, 0, 5)
+        start_advertising, BeaconService::start_advertising, 0, 5);
 
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(
         GATTRequester_discover_characteristics_overloads,
-        GATTRequester::discover_characteristics, 0, 3)
+        GATTRequester::discover_characteristics, 0, 3);
 
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(
         GATTRequester_discover_characteristics_async_overloads,
-        GATTRequester::discover_characteristics_async, 1, 4)
+        GATTRequester::discover_characteristics_async, 1, 4);
 
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(
         GATTRequester_discover_descriptors_overloads,
-        GATTRequester::discover_descriptors, 0, 3)
+        GATTRequester::discover_descriptors, 0, 3);
 
 BOOST_PYTHON_MODULE(gattlib) {
 
