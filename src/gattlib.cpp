@@ -537,8 +537,8 @@ boost::python::list GATTRequester::discover_primary() {
         // FIXME: now, response is deleted, but is still registered on
         // GLIB as callback!!
 		throw std::runtime_error("Device is not responding!");
-	return response.received();
 
+	return response.received();
 }
 
 /* Characteristics Discovery
@@ -590,7 +590,7 @@ void GATTRequester::discover_characteristics_async(GATTResponse* response,
 
 boost::python::list GATTRequester::discover_characteristics(int start, int end,
         std::string uuid_str) {
-    PyThreadsGuard guard;
+    //PyThreadsGuard guard;
     GATTResponse response;
     discover_characteristics_async(&response, start, end, uuid_str);
 
