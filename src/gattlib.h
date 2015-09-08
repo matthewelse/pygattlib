@@ -75,7 +75,6 @@ public:
 	void write_by_handle_async(uint16_t handle, std::string data, GATTResponse* response);
     boost::python::list write_by_handle(uint16_t handle, std::string data);
 
-    void write_without_response_by_handle_async(uint16_t handle, std::string data, GATTResponse* response);
     void write_without_response_by_handle(uint16_t handle, std::string data);
 
 	friend void connect_cb(GIOChannel*, GError*, gpointer);

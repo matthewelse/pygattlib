@@ -455,29 +455,13 @@ GATTRequester::write_by_handle(uint16_t handle, std::string data) {
     return response.received();
 }
 
-static void
-write_without_response_by_handle_cb(gpointer userp) {
-    GATTResponse* response = (GATTResponse*)userp;
-    response->notify(0);
-}
-
-void
-GATTRequester::write_without_response_by_handle_async(uint16_t handle, std::string data, GATTResponse* response) {
-    check_channel();
-    gatt_write_cmd(_attrib, handle, (const uint8_t*)data.data(), data.size(),
-                   write_without_response_by_handle_cb, (gpointer)response);
-}
-
-
 void
 GATTRequester::write_without_response_by_handle(uint16_t handle, std::string data) {
-    PyThreadsGuard guard;
-    GATTResponse response;
+    //PyThreadsGuard guard;
 
-    write_without_response_by_handle_async(handle, data, &response);
-
-    if (not response.wait(MAX_WAIT_FOR_PACKET))
-        throw std::runtime_error("Device is not responding.");
+    check_channel();
+    gatt_write_cmd(_attrib, handle, (const uint8_t*)data.data(), data.size(),
+                   NULL, NULL);
 }
 
 
@@ -585,9 +569,11 @@ void GATTRequester::discover_characteristics_async(GATTResponse* response,
         int start, int end, std::string uuid_str) {
     check_connected();
 
+    unsigned int err;
+
     if (uuid_str.size() == 0) {
         //TODO handle error
-        gatt_discover_char(_attrib, start, end, NULL, discover_char_cb,
+        err = gatt_discover_char(_attrib, start, end, NULL, discover_char_cb,
                 (gpointer) response);
     } else {
         bt_uuid_t uuid;
@@ -595,9 +581,11 @@ void GATTRequester::discover_characteristics_async(GATTResponse* response,
             throw std::runtime_error("Invalid UUID");
         }
         //TODO handle error
-        gatt_discover_char(_attrib, start, end, &uuid, discover_char_cb,
+        err = gatt_discover_char(_attrib, start, end, &uuid, discover_char_cb,
                 (gpointer) response);
     }
+
+    //std::cout << "error code: " << err << std::endl;
 }
 
 boost::python::list GATTRequester::discover_characteristics(int start, int end,
