@@ -16,6 +16,14 @@
 
 #include "gattlib.h"
 
+#if 1
+#define DEBUG(x) std::cout << "GATTRequester:" << x << std::endl;
+#else
+#define DEBUG(x)
+#endif
+
+#define DELAY 0.1
+
 class PyThreadsGuard {
 public:
     PyThreadsGuard() : _save(NULL) {
@@ -28,6 +36,15 @@ public:
 
 private:
     PyThreadState* _save;
+};
+
+class PyGILGuard {
+public:
+    PyGILGuard() { _state = PyGILState_Ensure(); }
+    ~PyGILGuard() { PyGILState_Release(_state); }
+
+private:
+    PyGILState_STATE _state;
 };
 
 
@@ -104,6 +121,8 @@ GATTRequester::GATTRequester(std::string address, bool do_connect,
     _channel(NULL),
     _attrib(NULL) {
 
+    //pthread_mutex_init(&_lock, NULL);
+
     int dev_id = hci_devid(_device.c_str());
     if (dev_id < 0)
         throw std::runtime_error("Invalid device!");
@@ -131,6 +150,8 @@ GATTRequester::~GATTRequester() {
     if (_attrib != NULL) {
         g_attrib_unref(_attrib);
     }
+
+    //pthread_mutex_destroy(&_lock);
 }
 
 void
@@ -155,6 +176,8 @@ GATTRequester::on_indication(const uint16_t handle, const std::string data) {
 
 void
 events_handler(const uint8_t* data, uint16_t size, gpointer userp) {
+    PyGILGuard guard;
+
     GATTRequester* request = (GATTRequester*)userp;
     uint16_t handle = htobs(bt_get_le16(&data[1]));
 
@@ -351,6 +374,8 @@ GATTRequester::read_by_handle_async(uint16_t handle, GATTResponse* response) {
 
 boost::python::list
 GATTRequester::read_by_handle(uint16_t handle) {
+    //pthread_mutex_lock(&_lock);
+
     GATTResponse response;
     read_by_handle_async(handle, &response);
 
@@ -359,6 +384,7 @@ GATTRequester::read_by_handle(uint16_t handle) {
         // GLIB as callback!!
         throw std::runtime_error("Device is not responding!");
 
+    //pthread_mutex_unlock(&_lock);
     return response.received();
 }
 
@@ -394,6 +420,8 @@ read_by_uuid_cb(guint8 status, const guint8* data,
 
 void
 GATTRequester::read_by_uuid_async(std::string uuid, GATTResponse* response) {
+    PyGILGuard guard;
+
     uint16_t start = 0x0001;
     uint16_t end = 0xffff;
     bt_uuid_t btuuid;
@@ -409,7 +437,7 @@ GATTRequester::read_by_uuid_async(std::string uuid, GATTResponse* response) {
 
 boost::python::list
 GATTRequester::read_by_uuid(std::string uuid) {
-    PyThreadsGuard guard;
+    //pthread_mutex_lock(&_lock);
     GATTResponse response;
 
     read_by_uuid_async(uuid, &response);
@@ -419,12 +447,14 @@ GATTRequester::read_by_uuid(std::string uuid) {
         // GLIB as callback!!
         throw std::runtime_error("Device is not responding!");
 
+    //pthread_mutex_unlock(&_lock);
     return response.received();
 }
 
 static void
 write_by_handle_cb(guint8 status, const guint8* data,
         guint16 size, gpointer userp) {
+    DEBUG("write successful");
     GATTResponse* response = (GATTResponse*)userp;
     if (!status && data) {
         response->on_response(std::string((const char*)data, size));
@@ -435,6 +465,7 @@ write_by_handle_cb(guint8 status, const guint8* data,
 void
 GATTRequester::write_by_handle_async(uint16_t handle, std::string data,
                                      GATTResponse* response) {
+    PyGILGuard guard;
     check_channel();
     gatt_write_char(_attrib, handle, (const uint8_t*)data.data(), data.size(),
                     write_by_handle_cb, (gpointer)response);
@@ -442,7 +473,8 @@ GATTRequester::write_by_handle_async(uint16_t handle, std::string data,
 
 boost::python::list
 GATTRequester::write_by_handle(uint16_t handle, std::string data) {
-    PyThreadsGuard guard;
+    //pthread_mutex_lock(&_lock);
+    usleep(DELAY * 1000000);
     GATTResponse response;
 
     write_by_handle_async(handle, data, &response);
@@ -452,16 +484,20 @@ GATTRequester::write_by_handle(uint16_t handle, std::string data) {
         // GLIB as callback!!
         throw std::runtime_error("Device is not responding!");
 
+    //pthread_mutex_unlock(&_lock);
     return response.received();
 }
 
 void
 GATTRequester::write_without_response_by_handle(uint16_t handle, std::string data) {
-    //PyThreadsGuard guard;
+    //pthread_mutex_lock(&_lock);
+    usleep(DELAY * 1000000);
+    PyGILGuard guard;
 
     check_channel();
     gatt_write_cmd(_attrib, handle, (const uint8_t*)data.data(), data.size(),
                    NULL, NULL);
+    //pthread_mutex_unlock(&_lock);
 }
 
 
@@ -521,6 +557,7 @@ discover_primary_cb(guint8 status, GSList *services, void *userp) {
 
 void
 GATTRequester::discover_primary_async(GATTResponse* response) {
+    PyGILGuard guard;
     check_connected();
     if( not gatt_discover_primary(
             _attrib, NULL, discover_primary_cb, (gpointer)response)) {
@@ -529,15 +566,18 @@ GATTRequester::discover_primary_async(GATTResponse* response) {
 }
 
 boost::python::list GATTRequester::discover_primary() {
-    PyThreadsGuard guard;
+    //pthread_mutex_lock(&_lock);
+    usleep(DELAY * 1000000);
+
 	GATTResponse response;
-	discover_primary_async(&response);
+    discover_primary_async(&response);
 
 	if (not response.wait(5*MAX_WAIT_FOR_PACKET))
         // FIXME: now, response is deleted, but is still registered on
         // GLIB as callback!!
 		throw std::runtime_error("Device is not responding!");
 
+    //pthread_mutex_unlock(&_lock);
 	return response.received();
 }
 
@@ -554,6 +594,7 @@ static void discover_char_cb(guint8 status, GSList *characteristics,
 
     for (GSList * l = characteristics; l; l = l->next) {
         struct gatt_char *chars = (gatt_char*) l->data;
+        std::cout << "received something :)" << std::endl;
         boost::python::dict adescr;
         adescr["uuid"] = chars->uuid;
         adescr["handle"] = chars->handle;
@@ -567,9 +608,15 @@ static void discover_char_cb(guint8 status, GSList *characteristics,
 
 void GATTRequester::discover_characteristics_async(GATTResponse* response,
         int start, int end, std::string uuid_str) {
+    PyGILGuard guard;
+
     check_connected();
 
     unsigned int err;
+
+    DEBUG("_attrib = " << _attrib << ", start = " << start << ", end = " << end);
+
+    DEBUG("_attrib = " << _attrib << ", start = " << start << ", end = " << end);
 
     if (uuid_str.size() == 0) {
         //TODO handle error
@@ -585,21 +632,24 @@ void GATTRequester::discover_characteristics_async(GATTResponse* response,
                 (gpointer) response);
     }
 
-    //std::cout << "error code: " << err << std::endl;
+    std::cout << "return code: " << err << std::endl;
 }
 
 boost::python::list GATTRequester::discover_characteristics(int start, int end,
         std::string uuid_str) {
-    //PyThreadsGuard guard;
+    usleep(DELAY * 1000000);
+
     GATTResponse response;
+
+    DEBUG("_attrib = " << _attrib << ", start = " << start << ", end = " << end);
     discover_characteristics_async(&response, start, end, uuid_str);
 
     if (not response.wait(5 * MAX_WAIT_FOR_PACKET))
         // FIXME: now, response is deleted, but is still registered on
         // GLIB as callback!!
         throw std::runtime_error("Device is not responding!");
-    return response.received();
 
+    return response.received();
 }
 
 static void discover_desc_cb(guint8 status, GSList *characteristics,
@@ -622,6 +672,7 @@ static void discover_desc_cb(guint8 status, GSList *characteristics,
 }
 
 void GATTRequester::discover_descriptors_async(GATTResponse* response, int start, int end, std::string uuid_str) {
+    PyGILGuard guard;
     check_connected();
 
     if (uuid_str.size() == 0) {
@@ -640,14 +691,19 @@ void GATTRequester::discover_descriptors_async(GATTResponse* response, int start
 }
 
 boost::python::list GATTRequester::discover_descriptors(int start, int end, std::string uuid) {
-    PyThreadsGuard guard;
+    //pthread_mutex_lock(&_lock);
+    usleep(DELAY * 1000000);
+
     GATTResponse response;
+
     discover_descriptors_async(&response, start, end, uuid);
 
     if (not response.wait(5 * MAX_WAIT_FOR_PACKET))
         // FIXME: now, response is deleted, but is still registered on
         // GLIB as callback!!
         throw std::runtime_error("Device is not responding!");
+
+    //pthread_mutex_unlock(&_lock);
     return response.received();
 }
 

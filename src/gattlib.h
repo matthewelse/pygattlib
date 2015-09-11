@@ -21,6 +21,8 @@ extern "C" {
 #include "attrib/gattrib.h"
 #include "attrib/gatt.h"
 #include "attrib/utils.h"
+
+#include <pthread.h>
 }
 
 #include "event.hpp"
@@ -106,6 +108,8 @@ private:
 	int _hci_socket;
 	GIOChannel* _channel;
 	GAttrib* _attrib;
+
+	pthread_mutex_t _lock;
 };
 
 #endif // _MIBANDA_GATTLIB_H_
