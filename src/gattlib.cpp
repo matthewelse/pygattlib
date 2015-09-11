@@ -16,13 +16,13 @@
 
 #include "gattlib.h"
 
-#if 1
+#if 0
 #define DEBUG(x) std::cout << "GATTRequester:" << x << std::endl;
 #else
 #define DEBUG(x)
 #endif
 
-#define DELAY 0.1
+#define DELAY 0.15
 
 class PyThreadsGuard {
 public:
@@ -594,7 +594,7 @@ static void discover_char_cb(guint8 status, GSList *characteristics,
 
     for (GSList * l = characteristics; l; l = l->next) {
         struct gatt_char *chars = (gatt_char*) l->data;
-        std::cout << "received something :)" << std::endl;
+        DEBUG("received something :)");
         boost::python::dict adescr;
         adescr["uuid"] = chars->uuid;
         adescr["handle"] = chars->handle;
@@ -632,7 +632,7 @@ void GATTRequester::discover_characteristics_async(GATTResponse* response,
                 (gpointer) response);
     }
 
-    std::cout << "return code: " << err << std::endl;
+    DEBUG("return code: " << err);
 }
 
 boost::python::list GATTRequester::discover_characteristics(int start, int end,
