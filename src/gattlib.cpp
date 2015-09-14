@@ -22,7 +22,7 @@
 #define DEBUG(x)
 #endif
 
-#define DELAY 0.15
+#define DELAY 0.05
 
 class PyThreadsGuard {
 public:
