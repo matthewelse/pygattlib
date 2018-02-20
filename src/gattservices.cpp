@@ -123,6 +123,7 @@ DiscoveryService::process_input(unsigned char* buffer, int size, boost::python::
         int appearance = parse_appearance(info->data, info->length);
         std::string name = parse_name(info->data, info->length);
         boost::python::list uuids = parse_uuids(info->data, info->length);
+		int8_t *rssi = (int8_t *) (info->data + info->length);
 
         if (!ret.contains(addr)) {
         	boost::python::dict new_object;
@@ -141,6 +142,9 @@ DiscoveryService::process_input(unsigned char* buffer, int size, boost::python::
 
     	if (!ret[addr].contains("uuids") || boost::python::len(uuids) > boost::python::len(ret[addr]["uuids"]))
     		ret[addr]["uuids"] = uuids;
+
+		if (!ret[addr].contains("rssi"))
+			ret[addr]["rssi"] = rssi;
 
         ptr += sizeof(evt_le_meta_event);
     }
